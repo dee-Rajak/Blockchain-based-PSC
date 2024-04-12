@@ -29,10 +29,13 @@ contract StakeholderManager is AccessControl {
     mapping(address => Stakeholder) public stakeholders;
     mapping(bytes32 => address[]) private stakeholdersByRole;
     mapping(address => bool) private isInRegistrationQueue;
+    mapping(address => uint256) private registrationQueueIndex;
 
     event StakeholderRegistered(address indexed stakeholder, bytes32 indexed role);
     event StakeholderApproved(address indexed stakeholder, bytes32 indexed role);
     event StakeholderRemoved(address indexed stakeholder, bytes32 indexed role);
+    event StakeholderRegistrationRejected(address indexed stakeholder, bytes32 indexed role);
+    event StakeholderRegistrationUpdated(address indexed stakeholder, bytes32 indexed role);
 
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -60,8 +63,9 @@ contract StakeholderManager is AccessControl {
             location,
             detailsIPFSHash
         );
-        if (role != DEFAULT_ADMIN_ROLE) {
+        if (role != DEFAULT_ADMIN_ROLE && role != CONSUMER_ROLE) {
             registrationQueue.push(msg.sender);
+            registrationQueueIndex[msg.sender] = registrationQueue.length - 1;
             isInRegistrationQueue[msg.sender] = true;
         }
         if (isApproved) {
@@ -91,7 +95,7 @@ contract StakeholderManager is AccessControl {
             location,
             detailsIPFSHash
         );
-        emit StakeholderRegistered(msg.sender, role);
+        emit StakeholderRegistrationUpdated(msg.sender, role);
     }
 
     function approveStakeholder(address stakeholder) public onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -99,8 +103,53 @@ contract StakeholderManager is AccessControl {
         stakeholders[stakeholder].approved = true;
         _grantRole(stakeholders[stakeholder].role, stakeholder);
         stakeholdersByRole[stakeholders[stakeholder].role].push(stakeholder);
-        registrationQueue.pop(); // newly added
+        uint256 index = registrationQueueIndex[stakeholder];
+        registrationQueue[index] = registrationQueue[registrationQueue.length - 1];
+        registrationQueueIndex[registrationQueue[index]] = index;
+        registrationQueue.pop();
+        isInRegistrationQueue[stakeholder] = false;
         emit StakeholderApproved(stakeholder, stakeholders[stakeholder].role);
+    }
+
+    function rejectStakeholder(address stakeholder) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(isInRegistrationQueue[stakeholder], "Stakeholder not in registration queue");
+        uint256 index = registrationQueueIndex[stakeholder];
+        registrationQueue[index] = registrationQueue[registrationQueue.length - 1];
+        registrationQueueIndex[registrationQueue[index]] = index;
+        registrationQueue.pop();
+        isInRegistrationQueue[stakeholder] = false;
+        emit StakeholderRegistrationRejected(stakeholder, stakeholders[stakeholder].role);
+    }
+
+    function getStakeholderDetails(address stakeholderAddress)
+        public
+        view
+        returns (
+            string memory,
+            string memory,
+            bytes32,
+            bool,
+            string memory,
+            string memory
+        )
+    {
+        if (!stakeholders[stakeholderAddress].approved && !hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            revert("Provided address is not a stakeholder");
+        }
+        require(
+            hasRole(DEFAULT_ADMIN_ROLE, msg.sender) ||
+            (stakeholders[msg.sender].approved && stakeholders[stakeholderAddress].approved),
+            "Access denied"
+        );
+        Stakeholder memory stakeholder = stakeholders[stakeholderAddress];
+        return (
+            stakeholder.name,
+            stakeholder.email,
+            stakeholder.role,
+            stakeholder.approved,
+            stakeholder.location,
+            stakeholder.detailsIPFSHash
+        );
     }
 
     function removeStakeholder(address stakeholder) public onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -124,30 +173,6 @@ contract StakeholderManager is AccessControl {
 
     function getRegistrationQueueAddresses() public view onlyRole(DEFAULT_ADMIN_ROLE) returns (address[] memory) {
         return registrationQueue;
-    }
-
-    function getStakeholderDetails(address stakeholderAddress)
-        public
-        view
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        returns (
-            string memory,
-            string memory,
-            bytes32,
-            bool,
-            string memory,
-            string memory
-        )
-    {
-        Stakeholder memory stakeholder = stakeholders[stakeholderAddress];
-        return (
-            stakeholder.name,
-            stakeholder.email,
-            stakeholder.role,
-            stakeholder.approved,
-            stakeholder.location,
-            stakeholder.detailsIPFSHash
-        );
     }
 
     function grantAdminRole(address account) public onlyRole(DEFAULT_ADMIN_ROLE) {
