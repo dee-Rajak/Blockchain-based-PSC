@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
 import "./StakeholderManager.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
@@ -22,8 +22,9 @@ contract ProductManager is StakeholderManager {
     Counters.Counter private _productIdCounter;
     Counters.Counter private _registrationIdCounter;
 
-    mapping(uint256 => Product) private _products;
+    mapping(uint256 => Product) internal _products;
     mapping(uint256 => uint256) private _registrationIdToProductId;
+    mapping(uint256 => bool) private _isRegistrationIdInQueue;
     mapping(address => uint256[]) private _manufacturerProducts;
     uint256[] private _registrationQueue;
     uint256[] private _approvedProductIds;
@@ -42,7 +43,7 @@ contract ProductManager is StakeholderManager {
         uint256 registrationId = _registrationIdCounter.current();
         _registrationIdCounter.increment();
 
-        (, string memory manufacturerName, , , , ) = getStakeholderDetails(msg.sender);
+        (, string memory manufacturerName, , , , ,) = getStakeholderDetails(msg.sender);
 
         Product memory newProduct = Product({
             id: 0,
@@ -58,12 +59,14 @@ contract ProductManager is StakeholderManager {
 
         _products[registrationId] = newProduct;
         _registrationQueue.push(registrationId);
+        _isRegistrationIdInQueue[registrationId] = true;
 
         emit ProductRegistered(registrationId, name, msg.sender);
     }
 
     function approveProduct(uint256 registrationId) public onlyAdmin {
         require(_products[registrationId].id == 0, "Product is already approved");
+        require(_isRegistrationIdInQueue[registrationId], "Registration ID is not in the queue");
 
         uint256 productId = _productIdCounter.current();
         _productIdCounter.increment();
@@ -77,6 +80,7 @@ contract ProductManager is StakeholderManager {
         emit ProductApproved(productId, registrationId, _products[registrationId].name, _products[registrationId].manufacturer);
 
         _removeFromRegistrationQueue(registrationId);
+        _isRegistrationIdInQueue[registrationId] = false;
     }
 
     function rejectProduct(uint256 registrationId) public onlyAdmin {
@@ -192,5 +196,9 @@ contract ProductManager is StakeholderManager {
             }
         }
         revert("Product not found");
+    }
+
+    function isApprovedProduct(uint256 productId) public view returns (bool) {
+        return _products[productId].approved;
     }
 }

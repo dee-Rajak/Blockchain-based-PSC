@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
@@ -22,6 +22,7 @@ contract StakeholderManager is AccessControl {
         bool approved;
         string location;
         string detailsIPFSHash;
+        string license;
     }
 
     address[] private registrationQueue;
@@ -47,7 +48,8 @@ contract StakeholderManager is AccessControl {
         string memory password,
         bytes32 role,
         string memory location,
-        string memory detailsIPFSHash
+        string memory detailsIPFSHash,
+        string memory license
     ) public {
         require(!hasRole(role, msg.sender), "Stakeholder already registered");
         require(!hasRole(DEFAULT_ADMIN_ROLE, msg.sender) || role == DEFAULT_ADMIN_ROLE, "Admin cannot register for additional roles");
@@ -61,7 +63,8 @@ contract StakeholderManager is AccessControl {
             role,
             isApproved,
             location,
-            detailsIPFSHash
+            detailsIPFSHash,
+            license
         );
         if (role != DEFAULT_ADMIN_ROLE && role != CONSUMER_ROLE) {
             registrationQueue.push(msg.sender);
@@ -81,7 +84,8 @@ contract StakeholderManager is AccessControl {
         string memory password,
         bytes32 role,
         string memory location,
-        string memory detailsIPFSHash
+        string memory detailsIPFSHash,
+        string memory license
     ) public {
         require(isInRegistrationQueue[msg.sender], "Stakeholder not in registration queue");
         require(!hasRole(DEFAULT_ADMIN_ROLE, msg.sender) || role == DEFAULT_ADMIN_ROLE, "Admin cannot update registration");
@@ -93,7 +97,8 @@ contract StakeholderManager is AccessControl {
             role,
             stakeholders[msg.sender].approved,
             location,
-            detailsIPFSHash
+            detailsIPFSHash,
+            license
         );
         emit StakeholderRegistrationUpdated(msg.sender, role);
     }
@@ -130,6 +135,7 @@ contract StakeholderManager is AccessControl {
             bytes32,
             bool,
             string memory,
+            string memory,
             string memory
         )
     {
@@ -148,7 +154,8 @@ contract StakeholderManager is AccessControl {
             stakeholder.role,
             stakeholder.approved,
             stakeholder.location,
-            stakeholder.detailsIPFSHash
+            stakeholder.detailsIPFSHash,
+            stakeholder.license
         );
     }
 
